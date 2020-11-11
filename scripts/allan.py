@@ -10,13 +10,13 @@ import os
 import matplotlib.pyplot as plt  # only for plotting, not required for calculations
 import math
 
-def getRandomWalkSegment(tau,sigma):
+def getWhiteNoiseSegment(tau,sigma):
 
     m = -0.5 # slope of random walk
     """""""""""""""""""""""""""""""""
     " Find point where slope = -0.5 "
     """""""""""""""""""""""""""""""""
-    randomWalk = None
+    WhiteNoise = None
     i = 1
     idx = 1
     mindiff = 999
@@ -43,13 +43,55 @@ def getRandomWalkSegment(tau,sigma):
 
     return (pow(10,x1),pow(10,y1),pow(10,x2),pow(10,y2))
 
+
+def GetWhiteNoise(tau,sigma):
+
+    m = -0.5 # slope of random walk
+    sigma_min = getBiasInstabilityPoint(tau,sigma)
+    window_size = 100
+    log_sigma_avg = 0.0
+
+    while(sigma_min[2]-window_size<60):
+        window_size = window_size - 20
+
+    for i in range(sigma_min[2]-window_size):
+        log_tau = math.log(tau[i],10)
+        log_sigma = math.log(sigma[i],10)
+        log_sigma_avg = log_sigma_avg + log_sigma - m*log_tau
+    log_sigma_avg = log_sigma_avg/float(sigma_min[2]-window_size)
+
+    return (tau[0],pow(10,m*math.log(tau[0],10)+log_sigma_avg),
+            tau[sigma_min[2]],pow(10,m*math.log(tau[sigma_min[2]],10)+log_sigma_avg),
+            1,pow(10,log_sigma_avg))
+
+def GetRandomWalk(tau,sigma):
+
+    m = 0.5 # slope of random walk
+    sigma_min = getBiasInstabilityPoint(tau,sigma)
+    window_size = 100
+    log_sigma_avg = 0.0
+
+    while(sigma_min[2]+window_size>tau.shape[0]-60):
+        window_size = window_size - 20
+
+    for i in range(sigma_min[2]+window_size,tau.shape[0]):
+        log_tau = math.log(tau[i],10)
+        log_sigma = math.log(sigma[i],10)
+        log_sigma_avg = log_sigma_avg + log_sigma - m*log_tau
+    log_sigma_avg = log_sigma_avg/float(-sigma_min[2]-window_size+tau.shape[0])
+
+    return (3,pow(10,m*math.log(3,10)+log_sigma_avg),
+            tau[tau.shape[0]-1],pow(10,m*math.log(tau[tau.shape[0]-1],10)+log_sigma_avg),
+            3,pow(10,m*math.log(3,10)+log_sigma_avg))
+
+
 def getBiasInstabilityPoint(tau,sigma):
     i = 1
     while (i<tau.size):
         if (tau[i]>1) and ((sigma[i]-sigma[i-1])>0): # only check for tau > 10^0
             break
         i = i + 1
-    return (tau[i],sigma[i])
+    return (tau[i],sigma[i],i)
 
 def main(args):
 
@@ -129,13 +171,16 @@ def main(args):
     else:
         currentAxis = axis # just loop one time and break
 
+
+    fsummary = open(resultsPath+"allan_deviation.yaml","wt")
     while (currentAxis <= 6):
         (taus_used, adev, adev_err, adev_n) = allantools.oadev(data[currentAxis-1], data_type='freq', rate=float(sampleRate), taus=np.array(taus) )
 
-        randomWalkSegment = getRandomWalkSegment(taus_used,adev)
+        #WhiteNoiseSegment = getWhiteNoiseSegment(taus_used,adev)
+        WhiteNoiseSegment = GetWhiteNoise(taus_used,adev) # white noise slope
         biasInstabilityPoint = getBiasInstabilityPoint(taus_used,adev)
+        RandomWalkSegment = GetRandomWalk(taus_used,adev)
 
-        randomWalk = randomWalkSegment[3]
         biasInstability = biasInstabilityPoint[1]
         
         """""""""""""""
@@ -144,33 +189,43 @@ def main(args):
         if (currentAxis==1):
             fname = 'allan_accel_x'
             title = 'Allan Deviation: Accelerometer X'
+            axis_name = 'acc_x'
         elif (currentAxis==2):
             fname = 'allan_accel_y'
             title = 'Allan Deviation: Accelerometer Y'
+            axis_name = 'acc_y'
         elif (currentAxis==3):
             fname = 'allan_accel_z'
             title = 'Allan Deviation: Accelerometer Z'
+            axis_name = 'acc_z'
         elif (currentAxis==4):
             fname = 'allan_gyro_x'
             title = 'Allan Deviation: Gyroscope X'
+            axis_name = 'gyr_x'
         elif (currentAxis==5):
             fname = 'allan_gyro_y'
             title = 'Allan Deviation: Gyroscope Y'
+            axis_name = 'gyr_y'
         elif (currentAxis==6):
             fname = 'allan_gyro_z'
             title = 'Allan Deviation: Gyroscope Z'
+            axis_name = 'gyr_z'
 
         print "[%0.2f seconds] Finished calculating allan variance - writing results to %s"%(rospy.get_time()-t0,fname)
 
         f = open(resultsPath + fname + '.csv', 'wt')
 
+
         try:
             writer = csv.writer(f)
             writer.writerow( ('Random Walk', 'Bias Instability') )
-            writer.writerow( (randomWalk, biasInstability) )
+            writer.writerow( (WhiteNoiseSegment[5], biasInstability) )
             writer.writerow( ('Tau', 'AllanDev', 'AllanDevError', 'AllanDevN') )
             for i in range(taus_used.size):
                 writer.writerow( (taus_used[i],adev[i],adev_err[i],adev_n[i])  )
+
+            fsummary.write(axis_name+"_white_noise: "+str(WhiteNoiseSegment[5])+"\n") #white noise
+            fsummary.write(axis_name+"_random_walk: "+str(RandomWalkSegment[5])+"\n") #random walk
         finally:
             f.close()
 
@@ -183,10 +238,15 @@ def main(args):
         ax.set_xscale('log')
 
         plt.plot(taus_used,adev)
-        plt.plot([randomWalkSegment[0],randomWalkSegment[2]],
-                 [randomWalkSegment[1],randomWalkSegment[3]],'k--')
-        plt.plot(1,randomWalk,'rx',markeredgewidth=2.5,markersize=14.0)
-        plt.plot(biasInstabilityPoint[0],biasInstabilityPoint[1],'ro')
+        plt.plot([WhiteNoiseSegment[0],WhiteNoiseSegment[2]],
+                 [WhiteNoiseSegment[1],WhiteNoiseSegment[3]],'r--')
+        plt.plot(WhiteNoiseSegment[4],WhiteNoiseSegment[5],'rx',markeredgewidth=2.5,markersize=14.0)
+
+        plt.plot([RandomWalkSegment[0],RandomWalkSegment[2]],
+                 [RandomWalkSegment[1],RandomWalkSegment[3]],'b--')
+        plt.plot(RandomWalkSegment[4],RandomWalkSegment[5],'bx',markeredgewidth=2.5,markersize=14.0)
+
+        plt.plot(biasInstabilityPoint[0],biasInstabilityPoint[1],'go')
 
         plt.grid(True, which="both")
         plt.title(title)
@@ -197,12 +257,13 @@ def main(args):
                     ax.get_xticklabels() + ax.get_yticklabels()):
             item.set_fontsize(20)
 
-        plt.show(block=False)
+        #plt.show(block=False)
 
         plt.savefig(resultsPath + fname)
 
         currentAxis = currentAxis + 1 + axis*6 # increment currentAxis also break if axis is not =0
 
+    fsummary.close()
     inp=raw_input("Press Enter key to close figures and end program\n")
 
 if __name__ == '__main__':

@@ -1,11 +1,11 @@
 <launch>
 
   <node pkg="allan_variance" type="allan.py" name="allan_variance" output="screen" required="false">
-  	<param name="bagfile_path" value="/home/danpierce/devel/allanvar_ws/data/microstrain_static_1hr.bag"/>
-  	<param name="imu_topic_name" value="/imu/imu"/>
+  	<param name="bagfile_path" value="/media/turtlebot/shinSSD500GB1/bno_imu.bag"/>
+  	<param name="imu_topic_name" value="/imu/data"/>
   	<param name="axis" value="0"/>
   	<param name="sample_rate" value="100"/>
-    <param name="delta_measurement" value="false"/>
+  	<param name="delta_measurement" value="false"/>
   	<param name="number_of_lags" value="1000"/>
     <!-- <param name="results_directory_path" value="/path/to/results/directory"/> -->
   </node>
