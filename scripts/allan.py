@@ -16,7 +16,7 @@ def getWhiteNoiseSegment(tau,sigma):
     """""""""""""""""""""""""""""""""
     " Find point where slope = -0.5 "
     """""""""""""""""""""""""""""""""
-    WhiteNoise = None
+
     i = 1
     idx = 1
     mindiff = 999
@@ -213,21 +213,24 @@ def main(args):
 
         print "[%0.2f seconds] Finished calculating allan variance - writing results to %s"%(rospy.get_time()-t0,fname)
 
-        f = open(resultsPath + fname + '.csv', 'wt')
+        #f = open(resultsPath + fname + '.csv', 'wt')
 
 
         try:
+            fsummary.write(axis_name+"_white_noise: "+str(WhiteNoiseSegment[5])+"\n") #white noise
+            fsummary.write(axis_name+"_random_walk: "+str(RandomWalkSegment[5])+"\n") #random walk
+            """
             writer = csv.writer(f)
             writer.writerow( ('Random Walk', 'Bias Instability') )
             writer.writerow( (WhiteNoiseSegment[5], biasInstability) )
             writer.writerow( ('Tau', 'AllanDev', 'AllanDevError', 'AllanDevN') )
             for i in range(taus_used.size):
                 writer.writerow( (taus_used[i],adev[i],adev_err[i],adev_n[i])  )
+            """
 
-            fsummary.write(axis_name+"_white_noise: "+str(WhiteNoiseSegment[5])+"\n") #white noise
-            fsummary.write(axis_name+"_random_walk: "+str(RandomWalkSegment[5])+"\n") #random walk
         finally:
-            f.close()
+            pass
+            #f.close()
 
         """""""""""""""
         " Plot Result "
